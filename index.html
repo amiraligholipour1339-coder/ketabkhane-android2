@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#3949ab">
+<title>کتابخانه من</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f6fa;color:#202124}
+header{background:#3949ab;color:white;padding:20px 16px 18px;position:sticky;top:0;z-index:5}
+h1{margin:0 0 5px;font-size:23px}.sub{opacity:.85;font-size:13px}
+main{max-width:900px;margin:auto;padding:16px}
+.card{background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px #0000000b}
+.search{display:flex;gap:8px}.search input{flex:1}
+input,select,button{font:inherit;border-radius:11px;padding:12px;border:1px solid #ddd}
+button{border:0;background:#3949ab;color:white;font-weight:bold;cursor:pointer}.secondary{background:#eef0ff;color:#303f9f}
+.danger{background:#ffebee;color:#c62828}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px}
+.shelf{padding:15px;background:#f0f2ff;border:1px solid #dfe3ff;border-radius:13px;text-align:center;color:#303f9f;cursor:pointer}
+.shelf b{display:block;font-size:18px}.muted{color:#777;font-size:13px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.formgrid .full{grid-column:1/-1}
+.results{display:grid;gap:10px}.book{border:1px solid #e5e5e5;border-radius:13px;padding:13px}
+.booktitle{font-weight:bold;font-size:17px}.loc{margin-top:7px;color:#303f9f;font-weight:bold}
+.actions{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}.actions button{padding:8px 10px;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stat{text-align:center;background:#f7f7fb;border-radius:12px;padding:12px}.stat b{font-size:22px;display:block}
+.hidden{display:none}@media(max-width:600px){.formgrid{grid-template-columns:1fr}.formgrid .full{grid-column:auto}.stats{grid-template-columns:1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<header><h1>📚 کتابخانه من</h1><div class="sub">ثبت و جست‌وجوی کتاب در ۵۰ قفسه</div></header>
+<main>
+<section class="card">
+<div class="stats">
+<div class="stat"><b id="bookCount">0</b><span class="muted">کتاب</span></div>
+<div class="stat"><b>50</b><span class="muted">قفسه</span></div>
+<div class="stat"><b id="usedShelves">0</b><span class="muted">قفسه فعال</span></div>
+</div>
+</section>
+
+<section class="card">
+<h3>🔎 جست‌وجوی کتاب</h3>
+<div class="search"><input id="search" placeholder="نام کتاب، نویسنده یا موضوع..." oninput="renderSearch()"><button onclick="clearSearch()">پاک کردن</button></div>
+<div id="results" class="results" style="margin-top:12px"></div>
+</section>
+
+<section class="card">
+<h3>➕ ثبت کتاب</h3>
+<div class="formgrid">
+<input id="title" placeholder="نام کتاب *">
+<input id="author" placeholder="نویسنده">
+<input id="subject" placeholder="موضوع">
+<select id="shelf"></select>
+<input id="row" type="number" min="1" placeholder="ردیف داخل قفسه">
+<input id="note" class="full" placeholder="توضیحات اختیاری">
+</div>
+<button style="margin-top:10px;width:100%" onclick="addBook()">ثبت کتاب</button>
+</section>
+
+<section class="card">
+<h3>🗄️ قفسه‌ها</h3>
+<div id="shelves" class="grid"></div>
+</section>
+
+<section id="shelfView" class="card hidden">
+<h3 id="shelfTitle"></h3>
+<div id="shelfBooks" class="results"></div>
+</section>
+</main>
+
+<script>
+const KEY='ketabkhane_books_v1';
+let books=JSON.parse(localStorage.getItem(KEY)||'[]');
+const $=id=>document.getElementById(id);
+
+function save(){localStorage.setItem(KEY,JSON.stringify(books)); update();}
+function update(){
+ $('bookCount').textContent=books.length;
+ $('usedShelves').textContent=new Set(books.map(b=>b.shelf)).size;
+ $('shelf').innerHTML=Array.from({length:50},(_,i)=>`<option value="${i+1}">قفسه ${i+1}</option>`).join('');
+ renderShelves(); renderSearch();
+}
+function addBook(){
+ const title=$('title').value.trim();
+ if(!title){alert('نام کتاب را وارد کنید.');return}
+ books.push({id:Date.now(),title,author:$('author').value.trim(),subject:$('subject').value.trim(),
+ shelf:Number($('shelf').value),row:Number($('row').value)||null,note:$('note').value.trim()});
+ ['title','author','subject','row','note'].forEach(x=>$(x).value='');
+ save(); alert('کتاب با موفقیت ثبت شد.');
+}
+function bookCard(b){
+ return `<div class="book">
+ <div class="booktitle">${esc(b.title)}</div>
+ ${b.author?`<div>نویسنده: ${esc(b.author)}</div>`:''}
+ ${b.subject?`<div>موضوع: ${esc(b.subject)}</div>`:''}
+ <div class="loc">📍 قفسه ${b.shelf}${b.row?' — ردیف '+b.row:''}</div>
+ ${b.note?`<div class="muted">${esc(b.note)}</div>`:''}
+ <div class="actions"><button class="danger" onclick="removeBook(${b.id})">حذف</button></div>
+ </div>`;
+}
+function renderSearch(){
+ const q=$('search').value.trim().toLowerCase();
+ if(!q){$('results').innerHTML='<div class="muted">برای پیدا کردن کتاب، نام کتاب یا نویسنده را بنویسید.</div>';return}
+ const arr=books.filter(b=>[b.title,b.author,b.subject,b.note].join(' ').toLowerCase().includes(q));
+ $('results').innerHTML=arr.length?arr.map(bookCard).join(''):'<div class="muted">کتابی پیدا نشد.</div>';
+}
+function clearSearch(){$('search').value='';renderSearch()}
+function renderShelves(){
+ $('shelves').innerHTML=Array.from({length:50},(_,i)=>{
+  const n=i+1,c=books.filter(b=>b.shelf===n).length;
+  return `<div class="shelf" onclick="showShelf(${n})"><b>قفسه ${n}</b><span class="muted">${c} کتاب</span></div>`;
+ }).join('');
+}
+function showShelf(n){
+ const arr=books.filter(b=>b.shelf===n);
+ $('shelfView').classList.remove('hidden');
+ $('shelfTitle').textContent=`📚 کتاب‌های قفسه ${n}`;
+ $('shelfBooks').innerHTML=arr.length?arr.map(bookCard).join(''):'<div class="muted">این قفسه هنوز کتابی ندارد.</div>';
+ window.scrollTo({top:$('shelfView').offsetTop-70,behavior:'smooth'});
+}
+function removeBook(id){
+ if(confirm('این کتاب حذف شود؟')){books=books.filter(b=>b.id!==id);save();}
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+update();
+</script>
+</body>
+</html>
